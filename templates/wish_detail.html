@@ -1,0 +1,175 @@
+﻿{% extends "base.html" %}
+{% block title %}{{ wish.title }} - 校园微心愿{% endblock %}
+{% block content %}
+
+<div class="row">
+    <!-- 左侧：心愿详情 -->
+    <div class="col-lg-8">
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">心愿广场</a></li>
+                <li class="breadcrumb-item active">{{ wish.title }}</li>
+            </ol>
+        </nav>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+                <!-- 状态流转条 -->
+                <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                    {% set steps = [("pending","待认领"),("claimed","已认领"),("fulfilled","待确认"),("completed","已完成")] %}
+                    {% for sid, slabel in steps %}
+                    {% set active = wish.status == sid %}
+                    {% set done = steps.index((sid, slabel)) < steps|selectattr("0","equalto",wish.status)|list|length if wish.status != "cancelled" else False %}
+                    <div class="text-center flex-fill">
+                        <div class="rounded-circle mx-auto d-flex align-items-center justify-content-center
+                            {% if active or (wish.status == 'completed' and sid == 'completed') %}bg-success text-white
+                            {% elif wish.status == 'cancelled' %}bg-secondary text-white
+                            {% else %}bg-light text-muted{% endif %}"
+                            style="width:36px;height:36px;font-size:14px">
+                            {% if (wish.status == 'completed' or active) %}<i class="bi bi-check"></i>{% else %}{{ loop.index }}{% endif %}
+                        </div>
+                        <small class="d-block mt-1 {% if active %}fw-bold text-success{% else %}text-muted{% endif %}">{{ slabel }}</small>
+                    </div>
+                    {% if not loop.last %}
+                    <div class="flex-fill align-self-start mt-3">
+                        <div class="bg-{% if wish.status == 'cancelled' %}secondary{% else %}light{% endif %} rounded" style="height:3px"></div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                    {% if wish.status == "cancelled" %}
+                    <div class="text-center flex-fill">
+                        <div class="rounded-circle mx-auto bg-danger text-white d-flex align-items-center justify-content-center" style="width:36px;height:36px"><i class="bi bi-x"></i></div>
+                        <small class="d-block mt-1 fw-bold text-danger">已取消</small>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <h4>{{ wish.title }}</h4>
+                <div class="text-muted small mb-3">
+                    <span class="badge bg-info me-2">{{ wish.category }}</span>
+                    <i class="bi bi-person"></i> {{ wish.poster_name }}
+                    <span class="mx-1">·</span>
+                    <i class="bi bi-clock"></i> {{ wish.created_at[:16] }}
+                    <span class="mx-1">·</span>
+                    信用 <span class="fw-bold text-warning">{{ wish.poster_credit }}分</span>
+                </div>
+
+                {% if wish.wish_image %}
+                <img src="/static/uploads/{{ wish.wish_image }}" class="img-fluid rounded mb-3" style="max-height:300px">
+                {% endif %}
+
+                <p class="mb-0" style="white-space:pre-wrap">{{ wish.description }}</p>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="card-footer bg-transparent">
+                {% if user %}
+                    {% if user.id == wish.user_id %}
+                        <!-- 发布者操作 -->
+                        {% if wish.status == "fulfilled" %}
+                        <form method="post" action="/wish/{{ wish.id }}/confirm" class="d-inline" onsubmit="return confirm('确认心愿已完成？')">
+                            <input type="hidden" name="rating" value="5">
+                            <button class="btn btn-success"><i class="bi bi-check2-all"></i> 确认完成 (+5分)</button>
+                        </form>
+                        {% endif %}
+                        {% if wish.status == "pending" %}
+                        <form method="post" action="/wish/{{ wish.id }}/cancel" class="d-inline" onsubmit="return confirm('确定取消这个心愿吗？')">
+                            <button class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> 取消心愿</button>
+                        </form>
+                        {% endif %}
+                    {% else %}
+                        <!-- 其他人操作 -->
+                        {% if wish.status == "pending" %}
+                        <form method="post" action="/wish/{{ wish.id }}/claim">
+                            <button class="btn btn-primary"><i class="bi bi-hand-thumbs-up"></i> 认领这个心愿</button>
+                        </form>
+                        {% elif claim and claim.status == "active" %}
+                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#fulfillModal">
+                            <i class="bi bi-check-circle"></i> 我已完成，提交反馈
+                        </button>
+                        <form method="post" action="/claim/{{ claim.id }}/cancel" class="d-inline" onsubmit="return confirm('放弃认领将扣除5信用分，确定？')">
+                            <button class="btn btn-outline-warning btn-sm"><i class="bi bi-arrow-counterclockwise"></i> 放弃认领 (-5分)</button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    <a href="/login" class="btn btn-primary">登录后认领</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 反馈列表 -->
+        {% if feedbacks %}
+        <h5 class="mb-3"><i class="bi bi-chat-square-heart text-danger"></i> 完成反馈</h5>
+        {% for fb in feedbacks %}
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="fw-bold">{{ fb.author_name }}</span>
+                    <small class="text-muted">{{ fb.created_at[:16] }}</small>
+                </div>
+                {% if fb.content %}<p class="mb-2">{{ fb.content }}</p>{% endif %}
+                {% if fb.image %}
+                <img src="/static/uploads/{{ fb.image }}" class="img-fluid rounded" style="max-height:250px">
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- 右侧：认领者 -->
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><i class="bi bi-people-fill"></i> 认领记录</div>
+            <div class="card-body">
+                {% if active_claims %}
+                {% for c in active_claims %}
+                <div class="d-flex align-items-center mb-2 p-2 border rounded">
+                    <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-2" style="width:40px;height:40px">
+                        {{ c.claimer_name[0] }}
+                    </div>
+                    <div>
+                        <div class="fw-bold small">{{ c.claimer_name }}</div>
+                        <small class="text-muted">信用 {{ c.claimer_credit }}分 · {{ c.status|status_label }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted text-center mb-0">暂无认领记录</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 完成反馈弹窗 -->
+{% if claim and claim.status == "active" %}
+<div class="modal fade" id="fulfillModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/wish/{{ wish.id }}/fulfill" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">提交完成反馈</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">反馈内容</label>
+                        <textarea name="content" class="form-control" rows="3" placeholder="描述一下你是怎么完成这个心愿的~"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">上传图片证据</label>
+                        <input type="file" name="image" class="form-control" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-success">提交反馈</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,69 @@
+﻿{% extends "base.html" %}
+{% block title %}感谢墙 - 校园微心愿{% endblock %}
+{% block content %}
+
+<h3 class="mb-4"><i class="bi bi-heart-fill text-danger"></i> 感谢墙</h3>
+
+<div class="row">
+    <div class="col-lg-8">
+        {% if feedbacks %}
+        <div class="row g-3">
+            {% for fb in feedbacks %}
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="rounded-circle bg-danger bg-opacity-10 text-danger d-flex align-items-center justify-content-center me-2" style="width:40px;height:40px">
+                                {{ fb.helper_name[0] }}
+                            </div>
+                            <div>
+                                <div class="fw-bold small">
+                                    {{ fb.helper_name }}
+                                    <small class="text-muted">帮助了</small>
+                                    {{ fb.poster_name }}
+                                </div>
+                                <small class="text-muted">{{ fb.created_at[:10] }}</small>
+                            </div>
+                        </div>
+                        <h6 class="text-primary">{{ fb.wish_title }}</h6>
+                        {% if fb.content %}<p class="text-muted small mb-2">{{ fb.content }}</p>{% endif %}
+                        {% if fb.image %}
+                        <img src="/static/uploads/{{ fb.image }}" class="img-fluid rounded" style="max-height:150px">
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-heartbreak" style="font-size:3rem"></i>
+            <p class="mt-2">还没有人完成心愿，快来帮忙吧！</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header"><i class="bi bi-trophy-fill text-warning"></i> 信用排行榜</div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for h in top_helpers %}
+                    <div class="list-group-item d-flex align-items-center">
+                        <span class="fw-bold me-3 {% if loop.index == 1 %}text-warning{% elif loop.index == 2 %}text-secondary{% elif loop.index == 3 %}text-brown{% else %}text-muted{% endif %}" style="width:24px">
+                            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+                        </span>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold small">{{ h.name }}</div>
+                            <small class="text-muted">完成 {{ h.completed_count }} 个心愿</small>
+                        </div>
+                        <span class="badge bg-warning text-dark">{{ h.credit_score }}分</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

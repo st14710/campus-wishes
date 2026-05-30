@@ -1,0 +1,98 @@
+﻿{% extends "base.html" %}
+{% block title %}个人中心 - 校园微心愿{% endblock %}
+{% block content %}
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow-sm text-center">
+            <div class="card-body p-4">
+                <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center mx-auto mb-3" style="width:80px;height:80px;font-size:2rem">
+                    {{ user.name[0] }}
+                </div>
+                <h5>{{ user.name }}</h5>
+                <p class="text-muted small">{{ user.student_id }}</p>
+                <div class="d-flex justify-content-center gap-3 mt-3">
+                    <div class="text-center">
+                        <div class="fs-4 fw-bold text-primary">{{ my_wishes|length }}</div>
+                        <small class="text-muted">发布心愿</small>
+                    </div>
+                    <div class="text-center">
+                        <div class="fs-4 fw-bold text-success">{{ my_claims|length }}</div>
+                        <small class="text-muted">认领心愿</small>
+                    </div>
+                    <div class="text-center">
+                        <div class="fs-4 fw-bold text-warning">{{ user.credit_score }}</div>
+                        <small class="text-muted">信用分</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header"><i class="bi bi-info-circle"></i> 信用规则</div>
+            <div class="card-body small">
+                <p><span class="text-success">+10分</span> — 成功完成他人的心愿</p>
+                <p><span class="text-success">+5分</span> — 你的心愿被完成</p>
+                <p><span class="text-danger">-5分</span> — 放弃认领</p>
+                <p class="mb-0 text-muted">初始信用分: 100</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#myWishes">我发布的心愿</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#myClaims">我认领的心愿</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="myWishes">
+                {% if my_wishes %}
+                <div class="list-group">
+                    {% for w in my_wishes %}
+                    <a href="/wish/{{ w.id }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-{{ w.status|status_color }} me-2">{{ w.status|status_label }}</span>
+                                {{ w.title }}
+                            </div>
+                            <small class="text-muted">{{ w.created_at[:10] }}</small>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">还没有发布过心愿</p>
+                {% endif %}
+            </div>
+            <div class="tab-pane fade" id="myClaims">
+                {% if my_claims %}
+                <div class="list-group">
+                    {% for c in my_claims %}
+                    <a href="/wish/{{ c.wish_id }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-{{ c.status|status_color }} me-2">{{ c.status|status_label }}</span>
+                                {{ c.wish_title }}
+                                {% if c.wish_status == "completed" %}
+                                <span class="badge bg-success ms-1">已完结</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">{{ c.created_at[:10] }}</small>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">还没有认领过心愿</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

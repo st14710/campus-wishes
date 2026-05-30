@@ -1,0 +1,42 @@
+﻿{% extends "base.html" %}
+{% block title %}发布心愿 - 校园微心愿{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <h4 class="mb-4"><i class="bi bi-plus-circle text-primary"></i> 发布微心愿</h4>
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <form method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">心愿标题 <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" placeholder="比如：帮我带一份食堂二楼的酸菜鱼" required maxlength="60">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">详细描述 <span class="text-danger">*</span></label>
+                        <textarea name="description" class="form-control" rows="4" placeholder="描述一下你的小心愿，让好心人更了解~" required maxlength="500"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">分类</label>
+                        <select name="category" class="form-select">
+                            <option value="学习">📚 学习</option>
+                            <option value="生活">🏠 生活</option>
+                            <option value="运动">⚽ 运动</option>
+                            <option value="娱乐">🎮 娱乐</option>
+                            <option value="情感">💬 情感</option>
+                            <option value="其他">📌 其他</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">配图（可选）</label>
+                        <input type="file" name="image" class="form-control" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i> 发布心愿</button>
+                    <a href="/" class="btn btn-outline-secondary">取消</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

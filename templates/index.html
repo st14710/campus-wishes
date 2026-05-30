@@ -1,0 +1,98 @@
+﻿{% extends "base.html" %}
+{% block title %}心愿广场 - 校园微心愿{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0"><i class="bi bi-house-heart text-primary"></i> 心愿广场</h3>
+    {% if current_user() %}
+    <a href="/wish/post" class="btn btn-primary"><i class="bi bi-plus-lg"></i> 发布心愿</a>
+    {% endif %}
+</div>
+
+<!-- 统计卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 bg-primary bg-opacity-10 text-center p-3">
+            <div class="fs-3 fw-bold text-primary">{{ stats.total }}</div>
+            <div class="text-muted small">全部心愿</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-warning bg-opacity-10 text-center p-3">
+            <div class="fs-3 fw-bold text-warning">{{ stats.pending }}</div>
+            <div class="text-muted small">等待认领</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 bg-success bg-opacity-10 text-center p-3">
+            <div class="fs-3 fw-bold text-success">{{ stats.completed }}</div>
+            <div class="text-muted small">已实现</div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选 -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-center">
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="pending" {% if status=="pending" %}selected{% endif %}>待认领</option>
+                    <option value="claimed" {% if status=="claimed" %}selected{% endif %}>已认领</option>
+                    <option value="fulfilled" {% if status=="fulfilled" %}selected{% endif %}>待确认</option>
+                    <option value="completed" {% if status=="completed" %}selected{% endif %}>已完成</option>
+                    <option value="" {% if status=="" %}selected{% endif %}>全部状态</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="category" class="form-select form-select-sm">
+                    <option value="">全部分类</option>
+                    <option value="学习" {% if category=="学习" %}selected{% endif %}>📚 学习</option>
+                    <option value="生活" {% if category=="生活" %}selected{% endif %}>🏠 生活</option>
+                    <option value="运动" {% if category=="运动" %}selected{% endif %}>⚽ 运动</option>
+                    <option value="娱乐" {% if category=="娱乐" %}selected{% endif %}>🎮 娱乐</option>
+                    <option value="情感" {% if category=="情感" %}selected{% endif %}>💬 情感</option>
+                    <option value="其他" {% if category=="其他" %}selected{% endif %}>📌 其他</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">筛选</button>
+                <a href="/" class="btn btn-sm btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 心愿列表 -->
+{% if wishes %}
+<div class="row g-3">
+    {% for w in wishes %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card wish-card h-100 shadow-sm" onclick="location.href='/wish/{{ w.id }}'" style="cursor:pointer">
+            {% if w.wish_image %}
+            <img src="/static/uploads/{{ w.wish_image }}" class="card-img-top" style="height:140px;object-fit:cover">
+            {% endif %}
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="badge bg-{{ w.status|status_color }}">{{ w.status|status_label }}</span>
+                    <small class="text-muted">{{ w.category }}</small>
+                </div>
+                <h6 class="card-title">{{ w.title }}</h6>
+                <p class="card-text text-muted small text-truncate-2">{{ w.description[:80] }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted"><i class="bi bi-person"></i> {{ w.poster_name }}</small>
+                    <small class="text-muted">{{ w.created_at[:10] }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox" style="font-size:3rem"></i>
+    <p class="mt-2">暂无心愿，快来发布第一个吧！</p>
+</div>
+{% endif %}
+
+{% endblock %}

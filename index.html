@@ -1,0 +1,478 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>校园微心愿</title>
+<link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+body{background:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wish-card{transition:transform .2s,box-shadow .2s;border:none;border-radius:12px;overflow:hidden}
+.wish-card:hover{transform:translateY(-3px);box-shadow:0 8px 25px rgba(0,0,0,.1)!important}
+.text-truncate-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.navbar{background:linear-gradient(135deg,#4f46e5,#7c3aed)!important}
+.card{border-radius:12px;border:none}
+.btn{border-radius:8px}
+.form-control,.form-select{border-radius:8px}
+.badge{font-weight:500}
+#app{min-height:80vh}
+</style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark shadow-sm">
+<div class="container">
+<a class="navbar-brand fw-bold" href="#/"><i class="bi bi-stars"></i> 校园微心愿</a>
+<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+<span class="navbar-toggler-icon"></span>
+</button>
+<div class="collapse navbar-collapse" id="nav">
+<ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="#/"><i class="bi bi-house-heart"></i> 心愿广场</a></li>
+<li class="nav-item"><a class="nav-link" href="#/gratitude"><i class="bi bi-heart-fill text-danger"></i> 感谢墙</a></li>
+</ul>
+<ul class="navbar-nav" id="navRight"></ul>
+</div>
+</div>
+</nav>
+<div class="container py-3" id="app"></div>
+<footer class="bg-light py-3 mt-5 border-top">
+<div class="container text-center text-muted small">🌟 校园微心愿交换平台 — 让每一份善意都被看见</div>
+</footer>
+<div class="modal fade" id="imgModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-body p-0"><img id="imgModalSrc" class="w-100"></div></div></div></div>
+<script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+<script>
+
+// ==================== 数据层 ====================
+const DB = {
+  get(k){try{return JSON.parse(localStorage.getItem('cw_'+k)||'[]')}catch{return[]}},
+  set(k,v){localStorage.setItem('cw_'+k,JSON.stringify(v))},
+  nextId(k){const d=this.get(k);return d.length?Math.max(...d.map(x=>x.id))+1:1},
+  uid(){return localStorage.getItem('cw_uid')||null},
+  login(user){localStorage.setItem('cw_uid',String(user.id));localStorage.setItem('cw_uname',user.name)},
+  logout(){localStorage.removeItem('cw_uid');localStorage.removeItem('cw_uname')},
+  me(){const id=this.uid();if(!id)return null;return this.get('users').find(u=>u.id==id)||null}
+};
+
+function now(){return new Date().toISOString().slice(0,19).replace('T',' ')}
+
+const STATS_LABEL={pending:'待认领',claimed:'已认领',fulfilled:'待确认',completed:'已完成',cancelled:'已取消',active:'进行中'};
+const STATS_COLOR={pending:'warning',claimed:'info',fulfilled:'primary',completed:'success',cancelled:'secondary',active:'info'};
+
+// ==================== 路由 ====================
+function route(){
+  const hash=location.hash.slice(1)||'/';
+  const navRight=document.getElementById('navRight');
+  const me=DB.me();
+  if(me){
+    navRight.innerHTML=`<li class="nav-item dropdown">
+      <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> ${me.name} <span class="badge bg-warning text-dark">${me.credit_score}分</span></a>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="#/my"><i class="bi bi-person"></i> 个人中心</a></li>
+        <li><a class="dropdown-item" href="#/post"><i class="bi bi-plus-circle"></i> 发布心愿</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="#" onclick="DB.logout();route()"><i class="bi bi-box-arrow-right"></i> 退出</a></li>
+      </ul></li>`;
+  }else{
+    navRight.innerHTML=`<li class="nav-item"><a class="nav-link" href="#/login"><i class="bi bi-box-arrow-in-right"></i> 登录</a></li>`;
+  }
+
+  const app=document.getElementById('app');
+  if(hash==='/') renderIndex(app);
+  else if(hash==='/login') renderLogin(app);
+  else if(hash==='/post') renderPost(app);
+  else if(hash==='/my') renderMy(app);
+  else if(hash==='/gratitude') renderGratitude(app);
+  else if(hash.startsWith('/wish/')) renderWishDetail(app,parseInt(hash.split('/')[2]));
+  else app.innerHTML='<p class="text-center text-muted py-5">页面不存在</p>';
+}
+
+window.addEventListener('hashchange',route);
+window.addEventListener('DOMContentLoaded',()=>{
+  if(!DB.get('users').length){
+    DB.set('users',[{id:1,student_id:'2024001',name:'张三',credit_score:100,created_at:now()},
+      {id:2,student_id:'2024002',name:'李四',credit_score:100,created_at:now()},
+      {id:3,student_id:'2024003',name:'王五',credit_score:100,created_at:now()}]);
+    DB.set('wishes',[
+      {id:1,user_id:1,title:'帮我带一份食堂酸菜鱼',description:'食堂二楼酸菜鱼窗口，中午12点左右，大份微辣谢谢！',category:'生活',wish_image:'',status:'completed',created_at:'2026-05-28 12:00:00',updated_at:'2026-05-29 18:00:00'},
+      {id:2,user_id:2,title:'求一本《数据结构》课后答案',description:'要第三版的，电子版也可以，感激不尽！',category:'学习',wish_image:'',status:'claimed',created_at:'2026-05-29 10:00:00',updated_at:'2026-05-30 09:00:00'},
+      {id:3,user_id:3,title:'晚上一起跑步打卡',description:'想找个跑步搭子，每天晚上9点操场3公里，男女不限~',category:'运动',wish_image:'',status:'pending',created_at:'2026-05-30 08:00:00',updated_at:'2026-05-30 08:00:00'},
+      {id:4,user_id:1,title:'求推荐好听的歌单',description:'最近歌荒了，求推荐一些适合自习时听的歌',category:'娱乐',wish_image:'',status:'pending',created_at:'2026-05-30 14:00:00',updated_at:'2026-05-30 14:00:00'},
+      {id:5,user_id:2,title:'想找个人聊聊最近烦心事',description:'最近压力有点大，想找个人倾诉一下，线上聊聊就行',category:'情感',wish_image:'',status:'pending',created_at:'2026-05-30 15:00:00',updated_at:'2026-05-30 15:00:00'},
+    ]);
+    DB.set('claims',[
+      {id:1,wish_id:1,user_id:2,status:'completed',created_at:'2026-05-29 12:00:00',updated_at:'2026-05-29 18:00:00'},
+      {id:2,wish_id:2,user_id:3,status:'active',created_at:'2026-05-30 09:00:00',updated_at:'2026-05-30 09:00:00'},
+    ]);
+    DB.set('feedback',[
+      {id:1,wish_id:1,claim_id:1,user_id:2,content:'食堂二楼的酸菜鱼果然好吃！学弟很满意，我也开心~',image:'',created_at:'2026-05-29 17:00:00'},
+    ]);
+  }
+  route();
+});
+
+// ==================== 工具函数 ====================
+function userById(id){return DB.get('users').find(u=>u.id==id)}
+function h(html){const d=document.createElement('div');d.innerHTML=html;return d.firstElementChild}
+
+function imageToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function showImg(src){
+  document.getElementById('imgModalSrc').src=src;
+  new bootstrap.Modal(document.getElementById('imgModal')).show();
+}
+
+// ==================== 首页 - 心愿广场 ====================
+function renderIndex(app){
+  const wishes=DB.get('wishes').sort((a,b)=>b.id-a.id);
+  const cats=[...new Set(wishes.map(w=>w.category))];
+  const stats={total:wishes.length,completed:wishes.filter(w=>w.status==='completed').length,pending:wishes.filter(w=>w.status==='pending').length};
+
+  let html=`
+<div class="d-flex justify-content-between align-items-center mb-4">
+<h3 class="mb-0"><i class="bi bi-house-heart text-primary"></i> 心愿广场</h3>
+${DB.me()?'<a href="#/post" class="btn btn-primary"><i class="bi bi-plus-lg"></i> 发布心愿</a>':''}
+</div>
+<div class="row g-3 mb-4">
+<div class="col-md-4"><div class="card border-0 bg-primary bg-opacity-10 text-center p-3"><div class="fs-3 fw-bold text-primary">${stats.total}</div><div class="text-muted small">全部心愿</div></div></div>
+<div class="col-md-4"><div class="card border-0 bg-warning bg-opacity-10 text-center p-3"><div class="fs-3 fw-bold text-warning">${stats.pending}</div><div class="text-muted small">等待认领</div></div></div>
+<div class="col-md-4"><div class="card border-0 bg-success bg-opacity-10 text-center p-3"><div class="fs-3 fw-bold text-success">${stats.completed}</div><div class="text-muted small">已实现</div></div></div>
+</div>
+<div class="row g-3">`;
+
+  wishes.forEach(w=>{
+    const poster=userById(w.user_id);
+    html+=`
+<div class="col-md-6 col-lg-4">
+<div class="card wish-card h-100 shadow-sm" onclick="location.href='#/wish/${w.id}'" style="cursor:pointer">
+${w.wish_image?`<img src="${w.wish_image}" class="card-img-top" style="height:140px;object-fit:cover">`:''}
+<div class="card-body">
+<div class="d-flex justify-content-between align-items-start mb-2">
+<span class="badge bg-${STATS_COLOR[w.status]}">${STATS_LABEL[w.status]}</span>
+<small class="text-muted">${w.category}</small></div>
+<h6 class="card-title">${w.title}</h6>
+<p class="card-text text-muted small text-truncate-2">${w.description.slice(0,80)}</p>
+<div class="d-flex justify-content-between align-items-center">
+<small class="text-muted"><i class="bi bi-person"></i> ${poster?poster.name:'未知'}</small>
+<small class="text-muted">${w.created_at.slice(0,10)}</small></div>
+</div></div></div>`;
+  });
+
+  html+=wishes.length?'</div>':'</div><div class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:3rem"></i><p class="mt-2">暂无心愿，快来发布第一个吧！</p></div>';
+  app.innerHTML=html;
+}
+
+// ==================== 登录 ====================
+function renderLogin(app){
+  app.innerHTML=`
+<div class="row justify-content-center mt-5"><div class="col-md-5"><div class="card shadow"><div class="card-body p-4">
+<div class="text-center mb-4"><i class="bi bi-stars text-primary" style="font-size:3rem"></i><h4 class="mt-2">校园微心愿</h4><p class="text-muted small">让每一份小心愿都被看见</p></div>
+<div class="mb-3"><label class="form-label">学号</label><input type="text" id="loginSid" class="form-control" placeholder="请输入学号"></div>
+<div class="mb-3"><label class="form-label">姓名</label><input type="text" id="loginName" class="form-control" placeholder="请输入姓名"></div>
+<button class="btn btn-primary w-100" onclick="doLogin()">进入平台</button>
+<p class="text-muted small text-center mt-3 mb-0">首次登录自动注册，初始信用分100</p>
+</div></div></div></div>`;
+}
+
+function doLogin(){
+  const sid=document.getElementById('loginSid').value.trim();
+  const name=document.getElementById('loginName').value.trim();
+  if(!sid||!name)return alert('请填写学号和姓名');
+  let users=DB.get('users');
+  let user=users.find(u=>u.student_id===sid);
+  if(!user){
+    user={id:DB.nextId('users'),student_id:sid,name:name,credit_score:100,created_at:now()};
+    users.push(user);
+    DB.set('users',users);
+  }
+  DB.login(user);
+  route();
+}
+
+// ==================== 发布心愿 ====================
+function renderPost(app){
+  if(!DB.me()){location.hash='#/login';return}
+  app.innerHTML=`
+<div class="row justify-content-center"><div class="col-md-7"><h4 class="mb-4"><i class="bi bi-plus-circle text-primary"></i> 发布微心愿</h4>
+<div class="card shadow-sm"><div class="card-body p-4">
+<div class="mb-3"><label class="form-label">心愿标题 <span class="text-danger">*</span></label><input type="text" id="postTitle" class="form-control" placeholder="比如：帮我带一份食堂二楼的酸菜鱼" maxlength="60"></div>
+<div class="mb-3"><label class="form-label">详细描述 <span class="text-danger">*</span></label><textarea id="postDesc" class="form-control" rows="4" placeholder="描述一下你的小心愿~" maxlength="500"></textarea></div>
+<div class="mb-3"><label class="form-label">分类</label><select id="postCat" class="form-select"><option value="学习">📚 学习</option><option value="生活">🏠 生活</option><option value="运动">⚽ 运动</option><option value="娱乐">🎮 娱乐</option><option value="情感">💬 情感</option><option value="其他">📌 其他</option></select></div>
+<div class="mb-3"><label class="form-label">配图（可选）</label><input type="file" id="postImg" class="form-control" accept="image/*"></div>
+<button class="btn btn-primary" onclick="doPostWish()"><i class="bi bi-send"></i> 发布心愿</button>
+<a href="#/" class="btn btn-outline-secondary">取消</a>
+</div></div></div></div>`;
+}
+
+async function doPostWish(){
+  const title=document.getElementById('postTitle').value.trim();
+  const desc=document.getElementById('postDesc').value.trim();
+  if(!title||!desc)return alert('标题和描述不能为空');
+  const cat=document.getElementById('postCat').value;
+  const file=document.getElementById('postImg').files[0];
+  let img='';
+  if(file&&file.size<2*1024*1024){img=await imageToBase64(file)}else if(file){return alert('图片不能超过2MB')}
+  const wishes=DB.get('wishes');
+  wishes.push({id:DB.nextId('wishes'),user_id:parseInt(DB.uid()),title:title,description:desc,category:cat,wish_image:img,status:'pending',created_at:now(),updated_at:now()});
+  DB.set('wishes',wishes);
+  alert('心愿发布成功！');
+  location.hash='#/';
+}
+
+// ==================== 心愿详情 ====================
+function renderWishDetail(app,wishId){
+  const wish=DB.get('wishes').find(w=>w.id===wishId);
+  if(!wish){app.innerHTML='<p class="text-center text-muted py-5">心愿不存在</p>';return}
+  const poster=userById(wish.user_id);
+  const me=DB.me();
+  const claims=DB.get('claims').filter(c=>c.wish_id===wishId&&c.status!=='cancelled');
+  const feedbacks=DB.get('feedback').filter(f=>f.wish_id===wishId);
+  const myClaim=me?claims.find(c=>c.user_id==me.id):null;
+
+  const steps=[['pending','待认领'],['claimed','已认领'],['fulfilled','待确认'],['completed','已完成']];
+
+  let stepHtml='<div class="d-flex align-items-center mb-4 pb-3 border-bottom">';
+  steps.forEach(([sid,slabel],i)=>{
+    const isCurrent=wish.status===sid;
+    const isPast=wish.status==='completed'||(steps.findIndex(([s])=>s===wish.status)>i);
+    const cls=isCurrent||(wish.status==='completed'&&sid==='completed')?'bg-success text-white':isPast?'bg-light text-muted':'bg-light text-muted';
+    stepHtml+=`<div class="text-center flex-fill"><div class="rounded-circle mx-auto d-flex align-items-center justify-content-center ${cls}" style="width:36px;height:36px;font-size:14px">${wish.status==='completed'&&sid==='completed'?'<i class="bi bi-check"></i>':isCurrent&&wish.status==='completed'?'<i class="bi bi-check"></i>':i+1}</div><small class="d-block mt-1 ${isCurrent?'fw-bold text-success':'text-muted'}">${slabel}</small></div>`;
+    if(i<steps.length-1)stepHtml+=`<div class="flex-fill align-self-start mt-3"><div class="bg-light rounded" style="height:3px"></div></div>`;
+  });
+  if(wish.status==='cancelled')stepHtml+=`<div class="text-center flex-fill"><div class="rounded-circle mx-auto bg-danger text-white d-flex align-items-center justify-content-center" style="width:36px;height:36px"><i class="bi bi-x"></i></div><small class="d-block mt-1 text-danger fw-bold">已取消</small></div>`;
+  stepHtml+='</div>';
+
+  let actions='';
+  if(me){
+    if(me.id===wish.user_id){
+      if(wish.status==='fulfilled')actions+=`<button class="btn btn-success" onclick="confirmWish(${wish.id})"><i class="bi bi-check2-all"></i> 确认完成 (+5分)</button> `;
+      if(wish.status==='pending')actions+=`<button class="btn btn-outline-danger btn-sm" onclick="cancelWish(${wish.id})"><i class="bi bi-x-circle"></i> 取消心愿</button>`;
+    }else{
+      if(wish.status==='pending')actions+=`<button class="btn btn-primary" onclick="claimWish(${wish.id})"><i class="bi bi-hand-thumbs-up"></i> 认领这个心愿</button>`;
+      else if(myClaim&&myClaim.status==='active')actions+=`<button class="btn btn-success" onclick="showFulfill(${wish.id})"><i class="bi bi-check-circle"></i> 我已完成，提交反馈</button> <button class="btn btn-outline-warning btn-sm" onclick="cancelClaim(${myClaim.id})"><i class="bi bi-arrow-counterclockwise"></i> 放弃认领 (-5分)</button>`;
+    }
+  }else{actions='<a href="#/login" class="btn btn-primary">登录后认领</a>'}
+
+  let fbHtml='';
+  feedbacks.forEach(fb=>{
+    const author=userById(fb.user_id);
+    fbHtml+=`<div class="card mb-3 shadow-sm"><div class="card-body"><div class="d-flex justify-content-between mb-2"><span class="fw-bold">${author?author.name:'未知'}</span><small class="text-muted">${fb.created_at.slice(0,16)}</small></div>${fb.content?`<p class="mb-2">${fb.content}</p>`:''}${fb.image?`<img src="${fb.image}" class="img-fluid rounded" style="max-height:250px;cursor:pointer" onclick="showImg('${fb.image}')">`:''}</div></div>`;
+  });
+
+  let claimers='';
+  claims.forEach(c=>{
+    const claimer=userById(c.user_id);
+    claimers+=`<div class="d-flex align-items-center mb-2 p-2 border rounded"><div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center me-2" style="width:40px;height:40px">${claimer?claimer.name[0]:'?'}</div><div><div class="fw-bold small">${claimer?claimer.name:'未知'}</div><small class="text-muted">信用 ${claimer?claimer.credit_score:'?'}分 · ${STATS_LABEL[c.status]}</small></div></div>`;
+  });
+
+  app.innerHTML=`
+<div class="row"><div class="col-lg-8">
+<nav class="mb-3"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="#/">心愿广场</a></li><li class="breadcrumb-item active">${wish.title}</li></ol></nav>
+<div class="card shadow-sm mb-4"><div class="card-body p-4">
+${stepHtml}
+<h4>${wish.title}</h4>
+<div class="text-muted small mb-3"><span class="badge bg-info me-2">${wish.category}</span><i class="bi bi-person"></i> ${poster?poster.name:'未知'}<span class="mx-1">·</span><i class="bi bi-clock"></i> ${wish.created_at.slice(0,16)}<span class="mx-1">·</span>信用 <span class="fw-bold text-warning">${poster?poster.credit_score:'?'}分</span></div>
+${wish.wish_image?`<img src="${wish.wish_image}" class="img-fluid rounded mb-3" style="max-height:300px;cursor:pointer" onclick="showImg('${wish.wish_image}')">`:''}
+<p class="mb-0" style="white-space:pre-wrap">${wish.description}</p>
+</div><div class="card-footer bg-transparent">${actions}</div></div>
+${feedbacks.length?`<h5 class="mb-3"><i class="bi bi-chat-square-heart text-danger"></i> 完成反馈</h5>${fbHtml}`:''}
+</div>
+<div class="col-lg-4"><div class="card shadow-sm"><div class="card-header"><i class="bi bi-people-fill"></i> 认领记录</div><div class="card-body">${claimers||'<p class="text-muted text-center mb-0">暂无认领记录</p>'}</div></div></div>
+</div>
+${myClaim&&myClaim.status==='active'?`
+<div class="modal fade" id="fulfillModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5 class="modal-title">提交完成反馈</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+<div class="mb-3"><label class="form-label">反馈内容</label><textarea id="fulfillContent" class="form-control" rows="3" placeholder="描述一下你是怎么完成这个心愿的~"></textarea></div>
+<div class="mb-3"><label class="form-label">上传图片证据</label><input type="file" id="fulfillImg" class="form-control" accept="image/*"></div>
+</div>
+<div class="modal-footer"><button class="btn btn-success" onclick="doFulfill(${wish.id})">提交反馈</button></div>
+</div></div></div>`:''}`;
+
+  if(myClaim&&myClaim.status==='active'){
+    new bootstrap.Modal(document.getElementById('fulfillModal'));
+  }
+}
+
+function claimWish(wishId){
+  const me=DB.me();if(!me)return;
+  const claims=DB.get('claims');
+  claims.push({id:DB.nextId('claims'),wish_id:wishId,user_id:me.id,status:'active',created_at:now(),updated_at:now()});
+  DB.set('claims',claims);
+  const wishes=DB.get('wishes');
+  const w=wishes.find(w=>w.id===wishId);
+  if(w){w.status='claimed';w.updated_at=now();DB.set('wishes',wishes)}
+  alert('认领成功！');
+  route();
+}
+
+function cancelClaim(claimId){
+  if(!confirm('放弃认领将扣除5信用分，确定？'))return;
+  const me=DB.me();
+  const claims=DB.get('claims');
+  const c=claims.find(c=>c.id===claimId);
+  if(c){c.status='cancelled';c.updated_at=now();DB.set('claims',claims)}
+  // 恢复心愿状态
+  const wishes=DB.get('wishes');
+  const w=wishes.find(w=>w.id===c.wish_id);
+  if(w&&w.status==='claimed'){w.status='pending';w.updated_at=now();DB.set('wishes',wishes)}
+  // 扣分
+  const users=DB.get('users');
+  const u=users.find(u=>u.id===me.id);
+  if(u){u.credit_score=Math.max(0,u.credit_score-5);DB.set('users',users);DB.login(u)}
+  alert('已放弃认领，信用分 -5');
+  route();
+}
+
+function showFulfill(wishId){
+  new bootstrap.Modal(document.getElementById('fulfillModal')).show();
+}
+
+async function doFulfill(wishId){
+  const me=DB.me();
+  const content=document.getElementById('fulfillContent').value.trim();
+  const file=document.getElementById('fulfillImg').files[0];
+  let img='';
+  if(file&&file.size<2*1024*1024){img=await imageToBase64(file)}else if(file){return alert('图片不能超过2MB')}
+  if(!content&&!img)return alert('请填写反馈内容或上传图片');
+
+  const claims=DB.get('claims');
+  const claim=claims.find(c=>c.wish_id===wishId&&c.user_id===me.id&&c.status==='active');
+  if(!claim)return alert('认领已失效');
+  claim.status='fulfilled';claim.updated_at=now();DB.set('claims',claims);
+
+  const feedback=DB.get('feedback');
+  feedback.push({id:DB.nextId('feedback'),wish_id:wishId,claim_id:claim.id,user_id:me.id,content:content,image:img,created_at:now()});
+  DB.set('feedback',feedback);
+
+  const wishes=DB.get('wishes');
+  const w=wishes.find(w=>w.id===wishId);
+  if(w){w.status='fulfilled';w.updated_at=now();DB.set('wishes',wishes)}
+  alert('完成反馈已提交，等待确认~');
+  route();
+}
+
+function confirmWish(wishId){
+  if(!confirm('确认心愿已完成？'))return;
+  const wishes=DB.get('wishes');
+  const w=wishes.find(w=>w.id===wishId);
+  if(!w||w.status!=='fulfilled')return;
+  w.status='completed';w.updated_at=now();DB.set('wishes',wishes);
+
+  // 找认领者 +10
+  const claims=DB.get('claims');
+  const claim=claims.find(c=>c.wish_id===wishId&&c.status==='fulfilled');
+  const users=DB.get('users');
+  if(claim){
+    claim.status='completed';claim.updated_at=now();DB.set('claims',claims);
+    const claimer=users.find(u=>u.id===claim.user_id);
+    if(claimer){claimer.credit_score+=10;DB.set('users',users)}
+  }
+  // 发布者 +5
+  const poster=users.find(u=>u.id===w.user_id);
+  if(poster){poster.credit_score+=5;DB.set('users',users);DB.login(poster)}
+  alert('心愿已确认完成！双方信用分已更新 🎉');
+  route();
+}
+
+function cancelWish(wishId){
+  if(!confirm('确定取消这个心愿吗？'))return;
+  const wishes=DB.get('wishes');
+  const w=wishes.find(w=>w.id===wishId);
+  if(w){w.status='cancelled';w.updated_at=now();DB.set('wishes',wishes)}
+  alert('心愿已取消');
+  route();
+}
+
+// ==================== 感谢墙 ====================
+function renderGratitude(app){
+  const feedbacks=DB.get('feedback').sort((a,b)=>b.id-a.id);
+  const allWishes=DB.get('wishes');
+  const allUsers=DB.get('users');
+  const completedFbs=feedbacks.filter(fb=>{const w=allWishes.find(w=>w.id===fb.wish_id);return w&&w.status==='completed'});
+
+  // top helpers
+  const claims=DB.get('claims');
+  const helperMap={};
+  claims.filter(c=>c.status==='completed').forEach(c=>{helperMap[c.user_id]=(helperMap[c.user_id]||0)+1});
+  const topHelpers=allUsers.map(u=>({...u,completed_count:helperMap[u.id]||0})).sort((a,b)=>b.credit_score-a.credit_score).slice(0,10);
+
+  let cards='';
+  completedFbs.forEach(fb=>{
+    const wish=allWishes.find(w=>w.id===fb.wish_id);
+    const helper=allUsers.find(u=>u.id===fb.user_id);
+    const poster=wish?allUsers.find(u=>u.id===wish.user_id):null;
+    cards+=`
+<div class="col-md-6"><div class="card shadow-sm h-100"><div class="card-body">
+<div class="d-flex align-items-center mb-2">
+<div class="rounded-circle bg-danger bg-opacity-10 text-danger d-flex align-items-center justify-content-center me-2" style="width:40px;height:40px">${helper?helper.name[0]:'?'}</div>
+<div><div class="fw-bold small">${helper?helper.name:'?'} <small class="text-muted">帮助了</small> ${poster?poster.name:'?'}</div><small class="text-muted">${fb.created_at.slice(0,10)}</small></div></div>
+<h6 class="text-primary">${wish?wish.title:'未知心愿'}</h6>
+${fb.content?`<p class="text-muted small mb-2">${fb.content}</p>`:''}
+${fb.image?`<img src="${fb.image}" class="img-fluid rounded" style="max-height:150px;cursor:pointer" onclick="showImg('${fb.image}')">`:''}
+</div></div></div>`;
+  });
+
+  let rank='';
+  topHelpers.forEach((h,i)=>{
+    const medals=['🥇','🥈','🥉'];
+    rank+=`<div class="list-group-item d-flex align-items-center"><span class="fw-bold me-3" style="width:24px">${medals[i]||(i+1)}</span><div class="flex-grow-1"><div class="fw-bold small">${h.name}</div><small class="text-muted">完成 ${h.completed_count} 个心愿</small></div><span class="badge bg-warning text-dark">${h.credit_score}分</span></div>`;
+  });
+
+  app.innerHTML=`
+<h3 class="mb-4"><i class="bi bi-heart-fill text-danger"></i> 感谢墙</h3>
+<div class="row"><div class="col-lg-8"><div class="row g-3">${cards||'<div class="col-12 text-center py-5 text-muted"><i class="bi bi-heartbreak" style="font-size:3rem"></i><p class="mt-2">还没有人完成心愿，快来帮忙吧！</p></div>'}</div></div>
+<div class="col-lg-4"><div class="card shadow-sm"><div class="card-header"><i class="bi bi-trophy-fill text-warning"></i> 信用排行榜</div><div class="card-body p-0"><div class="list-group list-group-flush">${rank}</div></div></div></div></div>`;
+}
+
+// ==================== 个人中心 ====================
+function renderMy(app){
+  const me=DB.me();
+  if(!me){location.hash='#/login';return}
+  const myWishes=DB.get('wishes').filter(w=>w.user_id==me.id).sort((a,b)=>b.id-a.id);
+  const myClaims=DB.get('claims').filter(c=>c.user_id==me.id&&c.status!=='cancelled').sort((a,b)=>b.id-a.id);
+
+  let wlist='';
+  myWishes.forEach(w=>{
+    wlist+=`<a href="#/wish/${w.id}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between align-items-center"><div><span class="badge bg-${STATS_COLOR[w.status]} me-2">${STATS_LABEL[w.status]}</span>${w.title}</div><small class="text-muted">${w.created_at.slice(0,10)}</small></div></a>`;
+  });
+
+  let clist='';
+  myClaims.forEach(c=>{
+    const wish=DB.get('wishes').find(w=>w.id===c.wish_id);
+    clist+=`<a href="#/wish/${c.wish_id}" class="list-group-item list-group-item-action"><div class="d-flex justify-content-between align-items-center"><div><span class="badge bg-${STATS_COLOR[c.status]} me-2">${STATS_LABEL[c.status]}</span>${wish?wish.title:'?'}${wish&&wish.status==='completed'?' <span class="badge bg-success ms-1">已完结</span>':''}</div><small class="text-muted">${c.created_at.slice(0,10)}</small></div></a>`;
+  });
+
+  app.innerHTML=`
+<div class="row"><div class="col-md-4 mb-4">
+<div class="card shadow-sm text-center"><div class="card-body p-4">
+<div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center mx-auto mb-3" style="width:80px;height:80px;font-size:2rem">${me.name[0]}</div>
+<h5>${me.name}</h5><p class="text-muted small">${me.student_id}</p>
+<div class="d-flex justify-content-center gap-3 mt-3">
+<div class="text-center"><div class="fs-4 fw-bold text-primary">${myWishes.length}</div><small class="text-muted">发布心愿</small></div>
+<div class="text-center"><div class="fs-4 fw-bold text-success">${myClaims.length}</div><small class="text-muted">认领心愿</small></div>
+<div class="text-center"><div class="fs-4 fw-bold text-warning">${me.credit_score}</div><small class="text-muted">信用分</small></div>
+</div></div></div>
+<div class="card shadow-sm mt-3"><div class="card-header"><i class="bi bi-info-circle"></i> 信用规则</div><div class="card-body small">
+<p><span class="text-success">+10分</span> — 成功完成他人的心愿</p>
+<p><span class="text-success">+5分</span> — 你的心愿被完成</p>
+<p><span class="text-danger">-5分</span> — 放弃认领</p>
+<p class="mb-0 text-muted">初始信用分: 100</p>
+</div></div></div>
+<div class="col-md-8">
+<ul class="nav nav-tabs mb-3"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabWishes">我发布的心愿</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabClaims">我认领的心愿</button></li></ul>
+<div class="tab-content"><div class="tab-pane fade show active" id="tabWishes"><div class="list-group">${wlist||'<p class="text-muted text-center py-4">还没有发布过心愿</p>'}</div></div>
+<div class="tab-pane fade" id="tabClaims"><div class="list-group">${clist||'<p class="text-muted text-center py-4">还没有认领过心愿</p>'}</div></div></div>
+</div></div>`;
+}
+
+</script>
+</body>
+</html>
